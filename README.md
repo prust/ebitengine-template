@@ -1,5 +1,7 @@
 # ebitengine-template
-General template repository that integrates the main libs as a starting point for game jams
+General template repository that integrates the main libs as a starting point for game jams.
+
+View online at https://prust.github.io/ebitengine-template/.
 
 Libraries:
 * [ebitengine](https://ebitengine.org/) (game engine for Go)
