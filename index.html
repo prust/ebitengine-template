@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<script src="wasm_exec.js"></script>
+<script src="vendor/wasm_exec.js"></script>
 <script>
 const go = new Go();
 WebAssembly.instantiateStreaming(fetch("ebitengine-template.wasm"), go.importObject).then(result => {
