@@ -10,7 +10,6 @@ import (
 	input "github.com/quasilyte/ebitengine-input"
 	"github.com/setanarut/kamera/v2"
 	"github.com/solarlune/dngn"
-	"github.com/solarlune/resolv"
 	"github.com/yohamta/ganim8/v2"
 )
 
@@ -67,19 +66,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// get the camera bounds in world coords for culling purposes
 	x1, y1 := cam.ScreenToWorld(0, 0)
 	x2, y2 := cam.ScreenToWorld(g.screen_w, g.screen_h)
-	cam_rect := resolv.NewRectangleFromCorners(x1, y1, x2, y2)
 
 	// draw the map
 	map_select := game_map.Select()
 	op := &ebiten.DrawImageOptions{}
 	for cell := range map_select.Cells {
-		// TODO: create all these rects ONCE on map generation instead of on every frame
-		cell_rect := resolv.NewRectangle(float64(cell.X*16), float64(cell.Y*16), 16, 16)
-
 		// cull (only draw what's actually on-screen to avoid 100% CPU usage)
-		// apparently Intersection() only returns whether the *borders* or the rects intersect w/ each-other
-		// if one is entirely contained by the other, you have to also check IsContainedBy()
-		if cell_rect.IsContainedBy(cam_rect) || !cam_rect.Intersection(cell_rect).IsEmpty() {
+		if isRectangleOverlap(x1, y1, x2, y2, float64(cell.X*16), float64(cell.Y*16), float64(cell.X*16+16), float64(cell.Y*16+16)) {
 			op.GeoM.Reset()
 			op.GeoM.Translate(float64(cell.X*16), float64(cell.Y*16))
 			// smooth anti-aliasing (and so ebitengine batches calls due to identical Filter param)
@@ -158,4 +151,12 @@ func Check(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func isRectangleOverlap(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 float64, x4 float64, y4 float64) bool {
+	// If any of these are true, the rectangles do NOT overlap
+	if y3 >= y2 || y4 <= y1 || x3 >= x2 || x4 <= x1 {
+		return false
+	}
+	return true
 }
