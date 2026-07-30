@@ -9,7 +9,7 @@ Libraries:
 - [x] [ebitengine](https://ebitengine.org/) (game engine for Go)
 - [x] [ganim8](https://github.com/yohamta0/ganim8-lib) (animation lib)
 - [x] [resolv](https://github.com/SolarLune/resolv) (collision lib)
-- [x] [dngn](https://github.com/SolarLune/dngn) (random map generation lib)
+- [x] [dngn](https://github.com/SolarLune/dngn) (random map generation lib, supports [BSP generation](https://www.roguebasin.com/index.php?title=Basic_BSP_Dungeon_generation) and [random walk](https://www.roguebasin.com/index.php?title=Random_Walk_Cave_Generation) cave generation)
 - [x] [ebitengine-input](https://github.com/quasilyte/ebitengine-input) (input lib)
 - [x] [kamera](https://github.com/setanarut/kamera) (camera lib)
 
