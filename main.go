@@ -34,22 +34,25 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// draw the map
 	map_select := game_map.Select()
+	op := &ebiten.DrawImageOptions{}
 	for cell := range map_select.Cells {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64(cell.X * 16), float64(cell.Y * 16))
-		op.GeoM.Scale(1, 1)
-		// smooth anti-aliasing (and so ebitengine batches calls due to identical Filter param)
-		op.Filter = ebiten.FilterLinear
+		// culling to only draw what's actually on-screen avoids cranking the player's fan
+		if ((cell.X + 1) * 16 <= g.screen_w && (cell.Y + 1) * 16 <= g.screen_h) {
+			op.GeoM.Reset()
+			op.GeoM.Translate(float64(cell.X * 16), float64(cell.Y * 16))
+			op.GeoM.Scale(1, 1)
+			// smooth anti-aliasing (and so ebitengine batches calls due to identical Filter param)
+			op.Filter = ebiten.FilterLinear
 
-		v := game_map.Get(cell.X, cell.Y)
-		if v == 'x' || v == '|' {
-  		screen.DrawImage(wall_img, op)
-		} else if v == ' ' {
-			screen.DrawImage(floor_img, op)
-		} else if v == '#' {
-			screen.DrawImage(door_img, op)
-		}
-
+			v := game_map.Get(cell.X, cell.Y)
+			if v == 'x' || v == '|' {
+	  		screen.DrawImage(wall_img, op)
+			} else if v == ' ' {
+				screen.DrawImage(floor_img, op)
+			} else if v == '#' {
+				screen.DrawImage(door_img, op)
+			}
+    }
 	}
 	g.player_anim.Draw(screen, ganim8.DrawOpts(float64(g.screen_w)/2, float64(g.screen_h)/2, 0, 1, 1, 0.5, 0.5))
 }
