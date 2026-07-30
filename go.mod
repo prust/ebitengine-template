@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	github.com/hajimehoshi/ebiten/v2 v2.9.9
+	github.com/quasilyte/ebitengine-input v0.9.1
 	github.com/solarlune/dngn v0.0.0-20240724224203-f9f4d976f3cc
 	github.com/yohamta/ganim8/v2 v2.2.1
 )
