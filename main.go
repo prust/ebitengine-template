@@ -13,6 +13,7 @@ import (
 	input "github.com/quasilyte/ebitengine-input"
 	"github.com/setanarut/kamera/v2"
 	"github.com/solarlune/dngn"
+	"github.com/solarlune/resolv"
 	"github.com/yohamta/ganim8/v2"
 )
 
@@ -43,13 +44,15 @@ type Game struct {
 	player_input      *input.Handler
 	audio_context     *audio.Context
 	player_walk_sound *audio.Player
+	space             *resolv.Space
 }
 
 type Player struct {
-	x  int
-	y  int
-	dx int
-	dy int
+	x    float64
+	y    float64
+	dx   float64
+	dy   float64
+	rect *resolv.ConvexPolygon // DRY violation w/ x,y -- should we solely use the collision lib rect?
 }
 
 func (g *Game) Update() error {
@@ -75,6 +78,21 @@ func (g *Game) Update() error {
 
 	g.player.x += g.player.dx
 	g.player.y += g.player.dy
+	g.player.rect.Move(g.player.dx, g.player.dy)
+
+	// filter to shapes near the player
+	near_shapes := g.player.rect.SelectTouchingCells(4).FilterShapes()
+	g.player.rect.IntersectionTest(resolv.IntersectionTestSettings{
+		TestAgainst: near_shapes,
+		OnIntersect: func(set resolv.IntersectionSet) bool {
+			// back off from what we collided/intersected with
+			g.player.rect.MoveVec(set.MTV)
+			g.player.x += set.MTV.X
+			g.player.y += set.MTV.Y
+			// keep iterating (in case we're touching something else)
+			return true
+		},
+	})
 
 	if g.player_input.ActionIsJustPressed(action_down) {
 		g.player_dir = 0
@@ -132,7 +150,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			// op.Filter = ebiten.FilterLinear
 
 			v := game_map.Get(cell.X, cell.Y)
-			if v == 'x' || v == '|' {
+			if v == 'x' {
 				cam.Draw(wall_img, op, screen)
 			} else if v == ' ' {
 				cam.Draw(floor_img, op, screen)
@@ -154,24 +172,29 @@ func main() {
 	ebiten.SetWindowSize(1280, 960)
 	ebiten.SetWindowTitle("Ebitengine Template")
 
-	// generate map
-	game_map = dngn.NewLayout(100, 100)
-	game_map.GenerateBSP(dngn.NewDefaultBSPOptions())
-
-	// load images/spritesheets
-	var character_img, _, err = ebitenutil.NewImageFromFile("images/character_sheet.png")
-	Check(err)
-	wall_img, _, err = ebitenutil.NewImageFromFile("images/wall.png")
-	Check(err)
-	door_img, _, err = ebitenutil.NewImageFromFile("images/door.png")
-	Check(err)
-	floor_img, _, err = ebitenutil.NewImageFromFile("images/floor.png")
-	Check(err)
-
 	g := &Game{
 		screen_w: 640,
 		screen_h: 480,
 	}
+
+	// generate map
+	game_map = dngn.NewLayout(100, 100)
+	game_map.GenerateBSP(dngn.NewDefaultBSPOptions())
+
+	// create resolv (collision detection) rectangles for walls in the grid
+	// trying a 32x32 "cell" size (for now) for performant collision checks
+	g.space = resolv.NewSpace(100*16, 100*16, 32, 32)
+	wall_select := game_map.Select().FilterByRune('x')
+	for cell := range wall_select.Cells {
+		wall_rect := resolv.NewRectangle(float64(cell.X)*16, float64(cell.Y)*16, 16, 16)
+		g.space.Add(wall_rect)
+	}
+
+	// load images/spritesheets
+	var character_img = loadImg("character_sheet.png")
+	wall_img = loadImg("wall.png")
+	door_img = loadImg("door.png")
+	floor_img = loadImg("floor.png")
 
 	// initialize input system
 	g.input_system.Init(input.SystemConfig{DevicesEnabled: input.AnyDevice})
@@ -183,22 +206,22 @@ func main() {
 	}
 	g.player_input = g.input_system.NewHandler(0, keymap)
 	g.player = &Player{
-		x: g.screen_w / 2,
-		y: g.screen_h / 2,
+		x: float64(g.screen_w) / 2,
+		y: float64(g.screen_h) / 2,
 	}
+	g.player.rect = resolv.NewRectangle(g.player.x, g.player.y, 16, 32)
+	g.space.Add(g.player.rect)
 
 	g.audio_context = audio.NewContext(sample_rate)
-	// wav files shouldn't be closed here b/c audio.Player manages stream state
-	f, err := os.Open("audio/walk.wav")
-	Check(err)
-	d, err := wav.DecodeF32(f)
-	Check(err)
-	loop_walk := audio.NewInfiniteLoop(d, d.Length())
-	Check(err)
+
+	walk_wav := loadWav("walk.wav")
+	loop_walk := audio.NewInfiniteLoop(walk_wav, walk_wav.Length())
+	var err error
 	g.player_walk_sound, err = g.audio_context.NewPlayerF32(loop_walk)
 	Check(err)
 
-	g32 := ganim8.NewGrid(16, 32, 48, 128)
+	// 16x32 frames, 3 frame columns and 4 frame rows
+	g32 := ganim8.NewGrid(16, 32, 16*3, 32*4)
 	g.player_anim[0] = ganim8.New(character_img, g32.Frames("1-3", 1), anim_rate)
 	g.player_anim[1] = ganim8.New(character_img, g32.Frames("1-3", 2), anim_rate)
 	g.player_anim[2] = ganim8.New(character_img, g32.Frames("1-3", 3), anim_rate)
@@ -212,6 +235,21 @@ func main() {
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// wav files shouldn't be closed here b/c audio.Player manages stream state
+func loadWav(filename string) *wav.Stream {
+	f, err := os.Open("audio/" + filename)
+	Check(err)
+	wav_stream, err := wav.DecodeF32(f)
+	Check(err)
+	return wav_stream
+}
+
+func loadImg(filename string) *ebiten.Image {
+	wall_img, _, err := ebitenutil.NewImageFromFile("images/" + filename)
+	Check(err)
+	return wall_img
 }
 
 func Check(err error) {
