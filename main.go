@@ -2,9 +2,12 @@ package main
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/audio"
+	"github.com/hajimehoshi/ebiten/v2/audio/wav"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 
 	input "github.com/quasilyte/ebitengine-input"
@@ -18,6 +21,8 @@ const (
 	action_right
 	action_up
 	action_down
+	sample_rate = 48000
+	anim_rate   = (1000 / 8) * time.Millisecond // 8fps pixel art animation (looping 3-frame walk cycles)
 )
 
 var (
@@ -29,32 +34,80 @@ var (
 )
 
 type Game struct {
-	player       *Player
-	player_anim  *ganim8.Animation
-	screen_w     int
-	screen_h     int
-	input_system input.System
-	player_input *input.Handler
+	player            *Player
+	player_anim       [4]*ganim8.Animation // an animation for each of the 4 directions
+	player_dir        int                  // indexes the animation array
+	screen_w          int
+	screen_h          int
+	input_system      input.System
+	player_input      *input.Handler
+	audio_context     *audio.Context
+	player_walk_sound *audio.Player
 }
 
 type Player struct {
-	x int
-	y int
+	x  int
+	y  int
+	dx int
+	dy int
 }
 
 func (g *Game) Update() error {
 	g.input_system.Update()
+	was_walking := g.player.dx != 0 || g.player.dy != 0
+
 	if g.player_input.ActionIsPressed(action_left) {
-		g.player.x -= 4
+		g.player.dx = -4
 	} else if g.player_input.ActionIsPressed(action_right) {
-		g.player.x += 4
+		g.player.dx = 4
+	} else {
+		g.player.dx = 0
 	}
+
 	if g.player_input.ActionIsPressed(action_up) {
-		g.player.y -= 4
+		g.player.dy = -4
 	} else if g.player_input.ActionIsPressed(action_down) {
-		g.player.y += 4
+		g.player.dy = 4
+	} else {
+		g.player.dy = 0
 	}
-	g.player_anim.Update()
+	is_walking := g.player.dx != 0 || g.player.dy != 0
+
+	g.player.x += g.player.dx
+	g.player.y += g.player.dy
+
+	if g.player_input.ActionIsJustPressed(action_down) {
+		g.player_dir = 0
+	} else if g.player_input.ActionIsJustPressed(action_right) {
+		g.player_dir = 1
+	} else if g.player_input.ActionIsJustPressed(action_left) {
+		g.player_dir = 2
+	} else if g.player_input.ActionIsJustPressed(action_up) {
+		g.player_dir = 3
+	} else if g.player_input.ActionIsJustReleased(action_down) || g.player_input.ActionIsJustReleased(action_right) || g.player_input.ActionIsJustReleased(action_left) || g.player_input.ActionIsJustReleased(action_up) {
+		// if the player just released a key, change direction based on any other key that is still pressed
+		if g.player_input.ActionIsPressed(action_down) {
+			g.player_dir = 0
+		} else if g.player_input.ActionIsPressed(action_right) {
+			g.player_dir = 1
+		} else if g.player_input.ActionIsPressed(action_left) {
+			g.player_dir = 2
+		} else if g.player_input.ActionIsPressed(action_up) {
+			g.player_dir = 3
+		}
+	}
+
+	if !was_walking && is_walking {
+		g.player_walk_sound.Rewind()
+		g.player_walk_sound.Play()
+	} else if was_walking && !is_walking {
+		g.player_walk_sound.Pause()
+		g.player_anim[g.player_dir].GoToFrame(2)
+	}
+
+	if is_walking {
+		g.player_anim[g.player_dir].Update()
+	}
 
 	cam.LookAt(float64(g.player.x), float64(g.player.y))
 	return nil
@@ -90,7 +143,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 	op.GeoM.Reset()
 	op.GeoM.Translate(float64(g.player.x), float64(g.player.y))
-	cam.Draw(g.player_anim.Frame(), op, screen)
+	cam.Draw(g.player_anim[g.player_dir].Frame(), op, screen)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -134,8 +187,22 @@ func main() {
 		y: g.screen_h / 2,
 	}
 
+	g.audio_context = audio.NewContext(sample_rate)
+	// wav files shouldn't be closed here b/c audio.Player manages stream state
+	f, err := os.Open("audio/walk.wav")
+	Check(err)
+	d, err := wav.DecodeF32(f)
+	Check(err)
+	loop_walk := audio.NewInfiniteLoop(d, d.Length())
+	Check(err)
+	g.player_walk_sound, err = g.audio_context.NewPlayerF32(loop_walk)
+	Check(err)
+
 	g32 := ganim8.NewGrid(16, 32, 48, 128)
-	g.player_anim = ganim8.New(character_img, g32.Frames("1-3", 3), 150*time.Millisecond)
+	g.player_anim[0] = ganim8.New(character_img, g32.Frames("1-3", 1), anim_rate)
+	g.player_anim[1] = ganim8.New(character_img, g32.Frames("1-3", 2), anim_rate)
+	g.player_anim[2] = ganim8.New(character_img, g32.Frames("1-3", 3), anim_rate)
+	g.player_anim[3] = ganim8.New(character_img, g32.Frames("1-3", 4), anim_rate)
 
 	cam = kamera.NewCamera(float64(g.player.x), float64(g.screen_h/2), float64(g.screen_w), float64(g.screen_h))
 	cam.ShakeEnabled = true
