@@ -18,12 +18,10 @@ Libraries:
 
 - Download & install Go: https://go.dev/dl/
 - Install go modules: `go mod tidy`
-- Run the game: `go run -mod=mod .` (see note below re: `-mod=mod`)
+- Run the game: `go run .`
 
 # How to build the game for the browser
 
 ```
-$ env GOOS=js GOARCH=wasm go build -mod=mod -o ebitengine-template.wasm github.com/prust/ebitengine-template
+$ env GOOS=js GOARCH=wasm go build -o ebitengine-template.wasm github.com/prust/ebitengine-template
 ```
-
-The `-mod=mod` is necessary to force go to not use the `/vendor/` folder for modules (we're using it for vendored web assets, i.e. `wasm_exec.js`).
