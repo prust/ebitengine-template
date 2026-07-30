@@ -12,11 +12,11 @@ Libraries:
 * [ ] [ebitengine-input](https://github.com/quasilyte/ebitengine-input) (input lib)
 * [ ] [kamera](https://github.com/setanarut/kamera) (camera lib)
 
-# How to run the game from the terminal
+# How to install and run the game from the terminal
 
-```
-$ go run -mod=mod .
-```
+* Download & install Go: https://go.dev/dl/
+* Install go modules: `go mod tidy`
+* Run the game: `go run -mod=mod .` (see note below re: `-mod=mod`)
 
 # How to build the game for the browser
 
