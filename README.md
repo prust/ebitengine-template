@@ -8,11 +8,10 @@ Libraries:
 
 - [x] [ebitengine](https://ebitengine.org/) (game engine for Go)
 - [x] [ganim8](https://github.com/yohamta0/ganim8-lib) (animation lib)
-- [ ] [resolv](https://github.com/SolarLune/resolv) (collision lib)
+- [x] [resolv](https://github.com/SolarLune/resolv) (collision lib)
 - [x] [dngn](https://github.com/SolarLune/dngn) (random map generation lib)
-- [ ] [grid](https://github.com/s0rg/grid) (pathfinding and line-of-sight testing)
 - [x] [ebitengine-input](https://github.com/quasilyte/ebitengine-input) (input lib)
-- [ ] [kamera](https://github.com/setanarut/kamera) (camera lib)
+- [x] [kamera](https://github.com/setanarut/kamera) (camera lib)
 
 # How to install and run the game from the terminal
 

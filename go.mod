@@ -14,6 +14,9 @@ require (
 	github.com/ebitengine/hideconsole v1.0.0 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/jezek/xgb v1.3.1 // indirect
+	github.com/setanarut/fastnoise v1.2.0 // indirect
+	github.com/setanarut/kamera/v2 v2.98.2 // indirect
+	github.com/solarlune/resolv v0.8.1 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect

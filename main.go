@@ -8,7 +8,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 
 	input "github.com/quasilyte/ebitengine-input"
+	"github.com/setanarut/kamera/v2"
 	"github.com/solarlune/dngn"
+	"github.com/solarlune/resolv"
 	"github.com/yohamta/ganim8/v2"
 )
 
@@ -20,6 +22,7 @@ const (
 )
 
 var (
+	cam       *kamera.Camera
 	game_map  *dngn.Layout
 	wall_img  *ebiten.Image
 	door_img  *ebiten.Image
@@ -53,36 +56,48 @@ func (g *Game) Update() error {
 		g.player.y += 4
 	}
 	g.player_anim.Update()
+
+	cam.LookAt(float64(g.player.x), float64(g.player.y))
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Clear()
 
+	// get the camera bounds in world coords for culling purposes
+	x1, y1 := cam.ScreenToWorld(0, 0)
+	x2, y2 := cam.ScreenToWorld(g.screen_w, g.screen_h)
+	cam_rect := resolv.NewRectangleFromCorners(x1, y1, x2, y2)
+
 	// draw the map
 	map_select := game_map.Select()
 	op := &ebiten.DrawImageOptions{}
 	for cell := range map_select.Cells {
-		// culling to only draw what's actually on-screen avoids cranking the player's fan
-		if (cell.X+1)*16 <= g.screen_w && (cell.Y+1)*16 <= g.screen_h {
+		// TODO: create all these rects ONCE on map generation instead of on every frame
+		cell_rect := resolv.NewRectangle(float64(cell.X*16), float64(cell.Y*16), 16, 16)
+
+		// cull (only draw what's actually on-screen to avoid 100% CPU usage)
+		// apparently Intersection() only returns whether the *borders* or the rects intersect w/ each-other
+		// if one is entirely contained by the other, you have to also check IsContainedBy()
+		if cell_rect.IsContainedBy(cam_rect) || !cam_rect.Intersection(cell_rect).IsEmpty() {
 			op.GeoM.Reset()
 			op.GeoM.Translate(float64(cell.X*16), float64(cell.Y*16))
-			op.GeoM.Scale(1, 1)
 			// smooth anti-aliasing (and so ebitengine batches calls due to identical Filter param)
 			// op.Filter = ebiten.FilterLinear
 
 			v := game_map.Get(cell.X, cell.Y)
 			if v == 'x' || v == '|' {
-				screen.DrawImage(wall_img, op)
+				cam.Draw(wall_img, op, screen)
 			} else if v == ' ' {
-				screen.DrawImage(floor_img, op)
+				cam.Draw(floor_img, op, screen)
 			} else if v == '#' {
-				screen.DrawImage(door_img, op)
+				cam.Draw(door_img, op, screen)
 			}
 		}
 	}
-	g.player_anim.Draw(screen, ganim8.DrawOpts(float64(g.screen_w)/2, float64(g.screen_h)/2, 0, 1, 1, 0.5, 0.5))
-	ebitenutil.DebugPrintAt(screen, "player", g.player.x, g.player.y)
+	op.GeoM.Reset()
+	op.GeoM.Translate(float64(g.player.x), float64(g.player.y))
+	cam.Draw(g.player_anim.Frame(), op, screen)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -121,10 +136,18 @@ func main() {
 		action_down:  {input.KeyDown, input.KeyS},
 	}
 	g.player_input = g.input_system.NewHandler(0, keymap)
-	g.player = &Player{}
+	g.player = &Player{
+		x: g.screen_w / 2,
+		y: g.screen_h / 2,
+	}
 
 	g32 := ganim8.NewGrid(16, 32, 48, 128)
 	g.player_anim = ganim8.New(character_img, g32.Frames("1-3", 3), 150*time.Millisecond)
+
+	cam = kamera.NewCamera(float64(g.player.x), float64(g.screen_h/2), float64(g.screen_w), float64(g.screen_h))
+	cam.ShakeEnabled = true
+	cam.SmoothType = kamera.SmoothDamp
+	cam.SmoothOptions.SmoothDampTimeX = 0.15
 
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
