@@ -22,7 +22,7 @@ const (
 	action_up
 	action_down
 	sample_rate = 48000
-	anim_rate   = (1000 / 8) * time.Millisecond // 8fps pixel art animation (looping 3-frame walk cycles)
+	anim_rate   = time.Second / 8 // 8fps pixel art animation (looping 3-frame walk cycles)
 )
 
 var (
