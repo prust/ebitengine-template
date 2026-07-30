@@ -1,8 +1,2 @@
 <!DOCTYPE html>
-<script src="vendor/wasm_exec.js"></script>
-<script>
-const go = new Go();
-WebAssembly.instantiateStreaming(fetch("ebitengine-template.wasm"), go.importObject).then(result => {
-    go.run(result.instance);
-});
-</script>
+<iframe src="main.html" width="1280" height="960"></iframe>
