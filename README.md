@@ -22,5 +22,5 @@ Libraries:
 # How to build the game for the browser
 
 ```
-$ env GOOS=js GOARCH=wasm go build -o ebitengine-template.wasm github.com/prust/ebitengine-template
+env GOOS=js GOARCH=wasm go build -o ebitengine-template.wasm github.com/prust/ebitengine-template
 ```
