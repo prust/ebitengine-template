@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"embed"
+	"io/fs"
 	"log"
 	"math/rand/v2"
-	"os"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -17,6 +19,9 @@ import (
 	"github.com/solarlune/resolv"
 	"github.com/yohamta/ganim8/v2"
 )
+
+//go:embed sounds
+var sounds embed.FS
 
 const (
 	action_left input.Action = iota
@@ -276,9 +281,10 @@ func main() {
 
 // wav files shouldn't be closed here b/c audio.Player manages stream state
 func loadWav(filename string) *wav.Stream {
-	f, err := os.Open("audio/" + filename)
+	f, err := fs.ReadFile(sounds, "sounds/"+filename)
 	check(err)
-	wav_stream, err := wav.DecodeF32(f)
+	reader := bytes.NewReader(f)
+	wav_stream, err := wav.DecodeF32(reader)
 	check(err)
 	return wav_stream
 }
