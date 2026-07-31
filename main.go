@@ -63,8 +63,8 @@ func (p *Player) NormalizeVelocity() {
 	if length_squared == 0 {
 		return
 	} else {
-		p.dx /= length_squared / player_speed
-		p.dy /= length_squared / player_speed
+		p.dx *= player_speed / length_squared
+		p.dy *= player_speed / length_squared
 	}
 }
 
