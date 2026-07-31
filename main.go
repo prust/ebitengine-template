@@ -180,6 +180,14 @@ func main() {
 	// generate map
 	game_map = dngn.NewLayout(100, 100)
 	game_map.GenerateBSP(dngn.NewDefaultBSPOptions())
+	// extend doors so they are 2 tiles high instead of just 1
+	door_select := game_map.Select().FilterByRune('#')
+	for cell := range door_select.Cells {
+		is_in_vert_wall := game_map.Get(cell.X, cell.Y-1) == 'x' && game_map.Get(cell.X, cell.Y+1) == 'x'
+		if is_in_vert_wall {
+			game_map.Set(cell.X, cell.Y-1, '#')
+		}
+	}
 
 	// create resolv (collision detection) rectangles for walls in the grid
 	// trying a 32x32 "cell" size (for now) for performant collision checks
