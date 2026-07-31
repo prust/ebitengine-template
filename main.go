@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math/rand/v2"
 	"os"
 	"time"
 
@@ -189,6 +190,16 @@ func main() {
 		}
 	}
 
+	// line the outer border of the map with walls
+	for n := range 100 {
+		// left and right walls
+		game_map.Set(n, 0, 'x')
+		game_map.Set(n, 99, 'x')
+		// top and bottom walls
+		game_map.Set(0, n, 'x')
+		game_map.Set(99, n, 'x')
+	}
+
 	// create resolv (collision detection) rectangles for walls in the grid
 	// trying a 32x32 "cell" size (for now) for performant collision checks
 	g.space = resolv.NewSpace(100*16, 100*16, 32, 32)
@@ -213,9 +224,27 @@ func main() {
 		action_down:  {input.KeyDown, input.KeyS},
 	}
 	g.player_input = g.input_system.NewHandler(0, keymap)
+
+	// find a random, empty space in the map to spawn the player
+	var start_x, start_y float64
+	for _ = range 1000 {
+		x := rand.IntN(100)
+		y := rand.IntN(100)
+		// ensure the cell & the one below (since the player is 2 cells high) are empty
+		// disallow the 0,0 coordinate b/c we can't differentiate it from uninitialized vars
+		if (x != 0 || y != 0) && game_map.Get(x, y) == ' ' && game_map.Get(x, y) == ' ' {
+			start_x = float64(x)
+			start_y = float64(y)
+			break
+		}
+	}
+	if start_x == 0 && start_y == 0 {
+		panic("Unable to find an empty pair of cells to spawn player after 1000 tries")
+	}
+
 	g.player = &Player{
-		x: float64(g.screen_w) / 2,
-		y: float64(g.screen_h) / 2,
+		x: start_x * 16,
+		y: start_y * 16,
 	}
 	g.player.rect = resolv.NewRectangle(g.player.x, g.player.y, 16, 32)
 	g.space.Add(g.player.rect)
@@ -226,7 +255,7 @@ func main() {
 	loop_walk := audio.NewInfiniteLoop(walk_wav, walk_wav.Length())
 	var err error
 	g.player_walk_sound, err = g.audio_context.NewPlayerF32(loop_walk)
-	Check(err)
+	check(err)
 
 	// 16x32 frames, 3 frame columns and 4 frame rows
 	g32 := ganim8.NewGrid(16, 32, 16*3, 32*4)
@@ -248,22 +277,16 @@ func main() {
 // wav files shouldn't be closed here b/c audio.Player manages stream state
 func loadWav(filename string) *wav.Stream {
 	f, err := os.Open("audio/" + filename)
-	Check(err)
+	check(err)
 	wav_stream, err := wav.DecodeF32(f)
-	Check(err)
+	check(err)
 	return wav_stream
 }
 
 func loadImg(filename string) *ebiten.Image {
 	wall_img, _, err := ebitenutil.NewImageFromFile("images/" + filename)
-	Check(err)
+	check(err)
 	return wall_img
-}
-
-func Check(err error) {
-	if err != nil {
-		panic(err)
-	}
 }
 
 func isRectangleOverlap(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 float64, x4 float64, y4 float64) bool {
@@ -272,4 +295,10 @@ func isRectangleOverlap(x1 float64, y1 float64, x2 float64, y2 float64, x3 float
 		return false
 	}
 	return true
+}
+
+func check(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
