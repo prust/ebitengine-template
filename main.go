@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math/rand/v2"
 	"os"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	input "github.com/quasilyte/ebitengine-input"
 	"github.com/setanarut/kamera/v2"
 	"github.com/solarlune/dngn"
+	"github.com/solarlune/resolv"
 	"github.com/yohamta/ganim8/v2"
 )
 
@@ -43,13 +45,15 @@ type Game struct {
 	player_input      *input.Handler
 	audio_context     *audio.Context
 	player_walk_sound *audio.Player
+	space             *resolv.Space
 }
 
 type Player struct {
-	x  int
-	y  int
-	dx int
-	dy int
+	x    float64
+	y    float64
+	dx   float64
+	dy   float64
+	rect *resolv.ConvexPolygon // DRY violation w/ x,y -- should we solely use the collision lib rect?
 }
 
 func (g *Game) Update() error {
@@ -75,6 +79,21 @@ func (g *Game) Update() error {
 
 	g.player.x += g.player.dx
 	g.player.y += g.player.dy
+	g.player.rect.Move(g.player.dx, g.player.dy)
+
+	// filter to shapes near the player
+	near_shapes := g.player.rect.SelectTouchingCells(4).FilterShapes()
+	g.player.rect.IntersectionTest(resolv.IntersectionTestSettings{
+		TestAgainst: near_shapes,
+		OnIntersect: func(set resolv.IntersectionSet) bool {
+			// back off from what we collided/intersected with
+			g.player.rect.MoveVec(set.MTV)
+			g.player.x += set.MTV.X
+			g.player.y += set.MTV.Y
+			// keep iterating (in case we're touching something else)
+			return true
+		},
+	})
 
 	if g.player_input.ActionIsJustPressed(action_down) {
 		g.player_dir = 0
@@ -132,7 +151,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			// op.Filter = ebiten.FilterLinear
 
 			v := game_map.Get(cell.X, cell.Y)
-			if v == 'x' || v == '|' {
+			if v == 'x' {
 				cam.Draw(wall_img, op, screen)
 			} else if v == ' ' {
 				cam.Draw(floor_img, op, screen)
@@ -154,24 +173,47 @@ func main() {
 	ebiten.SetWindowSize(1280, 960)
 	ebiten.SetWindowTitle("Ebitengine Template")
 
-	// generate map
-	game_map = dngn.NewLayout(100, 100)
-	game_map.GenerateBSP(dngn.NewDefaultBSPOptions())
-
-	// load images/spritesheets
-	var character_img, _, err = ebitenutil.NewImageFromFile("images/character_sheet.png")
-	Check(err)
-	wall_img, _, err = ebitenutil.NewImageFromFile("images/wall.png")
-	Check(err)
-	door_img, _, err = ebitenutil.NewImageFromFile("images/door.png")
-	Check(err)
-	floor_img, _, err = ebitenutil.NewImageFromFile("images/floor.png")
-	Check(err)
-
 	g := &Game{
 		screen_w: 640,
 		screen_h: 480,
 	}
+
+	// generate map
+	game_map = dngn.NewLayout(100, 100)
+	game_map.GenerateBSP(dngn.NewDefaultBSPOptions())
+	// extend doors so they are 2 tiles high instead of just 1
+	door_select := game_map.Select().FilterByRune('#')
+	for cell := range door_select.Cells {
+		is_in_vert_wall := game_map.Get(cell.X, cell.Y-1) == 'x' && game_map.Get(cell.X, cell.Y+1) == 'x'
+		if is_in_vert_wall {
+			game_map.Set(cell.X, cell.Y-1, '#')
+		}
+	}
+
+	// line the outer border of the map with walls
+	for n := range 100 {
+		// left and right walls
+		game_map.Set(n, 0, 'x')
+		game_map.Set(n, 99, 'x')
+		// top and bottom walls
+		game_map.Set(0, n, 'x')
+		game_map.Set(99, n, 'x')
+	}
+
+	// create resolv (collision detection) rectangles for walls in the grid
+	// trying a 32x32 "cell" size (for now) for performant collision checks
+	g.space = resolv.NewSpace(100*16, 100*16, 32, 32)
+	wall_select := game_map.Select().FilterByRune('x')
+	for cell := range wall_select.Cells {
+		wall_rect := resolv.NewRectangle(float64(cell.X)*16, float64(cell.Y)*16, 16, 16)
+		g.space.Add(wall_rect)
+	}
+
+	// load images/spritesheets
+	var character_img = loadImg("character_sheet.png")
+	wall_img = loadImg("wall.png")
+	door_img = loadImg("door.png")
+	floor_img = loadImg("floor.png")
 
 	// initialize input system
 	g.input_system.Init(input.SystemConfig{DevicesEnabled: input.AnyDevice})
@@ -182,23 +224,41 @@ func main() {
 		action_down:  {input.KeyDown, input.KeyS},
 	}
 	g.player_input = g.input_system.NewHandler(0, keymap)
-	g.player = &Player{
-		x: g.screen_w / 2,
-		y: g.screen_h / 2,
+
+	// find a random, empty space in the map to spawn the player
+	var start_x, start_y float64
+	for _ = range 1000 {
+		x := rand.IntN(100)
+		y := rand.IntN(100)
+		// ensure the cell & the one below (since the player is 2 cells high) are empty
+		// disallow the 0,0 coordinate b/c we can't differentiate it from uninitialized vars
+		if (x != 0 || y != 0) && game_map.Get(x, y) == ' ' && game_map.Get(x, y) == ' ' {
+			start_x = float64(x)
+			start_y = float64(y)
+			break
+		}
+	}
+	if start_x == 0 && start_y == 0 {
+		panic("Unable to find an empty pair of cells to spawn player after 1000 tries")
 	}
 
-	g.audio_context = audio.NewContext(sample_rate)
-	// wav files shouldn't be closed here b/c audio.Player manages stream state
-	f, err := os.Open("audio/walk.wav")
-	Check(err)
-	d, err := wav.DecodeF32(f)
-	Check(err)
-	loop_walk := audio.NewInfiniteLoop(d, d.Length())
-	Check(err)
-	g.player_walk_sound, err = g.audio_context.NewPlayerF32(loop_walk)
-	Check(err)
+	g.player = &Player{
+		x: start_x * 16,
+		y: start_y * 16,
+	}
+	g.player.rect = resolv.NewRectangle(g.player.x, g.player.y, 16, 32)
+	g.space.Add(g.player.rect)
 
-	g32 := ganim8.NewGrid(16, 32, 48, 128)
+	g.audio_context = audio.NewContext(sample_rate)
+
+	walk_wav := loadWav("walk.wav")
+	loop_walk := audio.NewInfiniteLoop(walk_wav, walk_wav.Length())
+	var err error
+	g.player_walk_sound, err = g.audio_context.NewPlayerF32(loop_walk)
+	check(err)
+
+	// 16x32 frames, 3 frame columns and 4 frame rows
+	g32 := ganim8.NewGrid(16, 32, 16*3, 32*4)
 	g.player_anim[0] = ganim8.New(character_img, g32.Frames("1-3", 1), anim_rate)
 	g.player_anim[1] = ganim8.New(character_img, g32.Frames("1-3", 2), anim_rate)
 	g.player_anim[2] = ganim8.New(character_img, g32.Frames("1-3", 3), anim_rate)
@@ -214,10 +274,19 @@ func main() {
 	}
 }
 
-func Check(err error) {
-	if err != nil {
-		panic(err)
-	}
+// wav files shouldn't be closed here b/c audio.Player manages stream state
+func loadWav(filename string) *wav.Stream {
+	f, err := os.Open("audio/" + filename)
+	check(err)
+	wav_stream, err := wav.DecodeF32(f)
+	check(err)
+	return wav_stream
+}
+
+func loadImg(filename string) *ebiten.Image {
+	wall_img, _, err := ebitenutil.NewImageFromFile("images/" + filename)
+	check(err)
+	return wall_img
 }
 
 func isRectangleOverlap(x1 float64, y1 float64, x2 float64, y2 float64, x3 float64, y3 float64, x4 float64, y4 float64) bool {
@@ -226,4 +295,10 @@ func isRectangleOverlap(x1 float64, y1 float64, x2 float64, y2 float64, x3 float
 		return false
 	}
 	return true
+}
+
+func check(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
