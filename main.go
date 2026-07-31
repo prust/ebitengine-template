@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"embed"
+	"io/fs"
 	"log"
 	"math/rand/v2"
-	"os"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -18,13 +20,17 @@ import (
 	"github.com/yohamta/ganim8/v2"
 )
 
+//go:embed sounds
+var sounds embed.FS
+
 const (
 	action_left input.Action = iota
 	action_right
 	action_up
 	action_down
-	sample_rate = 48000
-	anim_rate   = time.Second / 8 // 8fps pixel art animation (looping 3-frame walk cycles)
+	sample_rate  = 48000
+	anim_rate    = time.Second / 8 // 8fps pixel art animation (looping 3-frame walk cycles)
+	player_speed = 4               // 4px/frame * 60 fps = 240px/sec
 )
 
 var (
@@ -61,17 +67,17 @@ func (g *Game) Update() error {
 	was_walking := g.player.dx != 0 || g.player.dy != 0
 
 	if g.player_input.ActionIsPressed(action_left) {
-		g.player.dx = -4
+		g.player.dx = -player_speed
 	} else if g.player_input.ActionIsPressed(action_right) {
-		g.player.dx = 4
+		g.player.dx = player_speed
 	} else {
 		g.player.dx = 0
 	}
 
 	if g.player_input.ActionIsPressed(action_up) {
-		g.player.dy = -4
+		g.player.dy = -player_speed
 	} else if g.player_input.ActionIsPressed(action_down) {
-		g.player.dy = 4
+		g.player.dy = player_speed
 	} else {
 		g.player.dy = 0
 	}
@@ -276,9 +282,10 @@ func main() {
 
 // wav files shouldn't be closed here b/c audio.Player manages stream state
 func loadWav(filename string) *wav.Stream {
-	f, err := os.Open("audio/" + filename)
+	f, err := fs.ReadFile(sounds, "sounds/"+filename)
 	check(err)
-	wav_stream, err := wav.DecodeF32(f)
+	reader := bytes.NewReader(f)
+	wav_stream, err := wav.DecodeF32(reader)
 	check(err)
 	return wav_stream
 }
