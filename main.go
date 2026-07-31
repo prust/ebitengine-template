@@ -26,7 +26,7 @@ const (
 	action_down
 	sample_rate = 48000
 	anim_rate   = time.Second / 8 // 8fps pixel art animation (looping 3-frame walk cycles)
-	player_velocity = 4
+	player_speed = 4
 )
 
 var (
@@ -63,8 +63,8 @@ func (p *Player) NormalizeVelocity() {
 	if length_squared == 0 {
 		return
 	} else {
-		p.dx /= length_squared / player_velocity
-		p.dy /= length_squared / player_velocity
+		p.dx /= length_squared / player_speed
+		p.dy /= length_squared / player_speed
 	}
 }
 
@@ -73,17 +73,17 @@ func (g *Game) Update() error {
 	was_walking := g.player.dx != 0 || g.player.dy != 0
 
 	if g.player_input.ActionIsPressed(action_left) {
-		g.player.dx = -player_velocity
+		g.player.dx = -player_speed
 	} else if g.player_input.ActionIsPressed(action_right) {
-		g.player.dx = player_velocity
+		g.player.dx = player_speed
 	} else {
 		g.player.dx = 0
 	}
 
 	if g.player_input.ActionIsPressed(action_up) {
-		g.player.dy = -player_velocity
+		g.player.dy = -player_speed
 	} else if g.player_input.ActionIsPressed(action_down) {
-		g.player.dy = player_velocity
+		g.player.dy = player_speed
 	} else {
 		g.player.dy = 0
 	}
