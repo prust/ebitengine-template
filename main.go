@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math"
 	"math/rand/v2"
 	"os"
 	"time"
@@ -25,6 +26,7 @@ const (
 	action_down
 	sample_rate = 48000
 	anim_rate   = time.Second / 8 // 8fps pixel art animation (looping 3-frame walk cycles)
+	player_velocity = 4
 )
 
 var (
@@ -56,26 +58,38 @@ type Player struct {
 	rect *resolv.ConvexPolygon // DRY violation w/ x,y -- should we solely use the collision lib rect?
 }
 
+func (p *Player) NormalizeVelocity() {
+	length_squared := math.Sqrt(p.dx * p.dx + p.dy * p.dy)
+	if length_squared == 0 {
+		return
+	} else {
+		p.dx /= length_squared / player_velocity
+		p.dy /= length_squared / player_velocity
+	}
+}
+
 func (g *Game) Update() error {
 	g.input_system.Update()
 	was_walking := g.player.dx != 0 || g.player.dy != 0
 
 	if g.player_input.ActionIsPressed(action_left) {
-		g.player.dx = -4
+		g.player.dx = -player_velocity
 	} else if g.player_input.ActionIsPressed(action_right) {
-		g.player.dx = 4
+		g.player.dx = player_velocity
 	} else {
 		g.player.dx = 0
 	}
 
 	if g.player_input.ActionIsPressed(action_up) {
-		g.player.dy = -4
+		g.player.dy = -player_velocity
 	} else if g.player_input.ActionIsPressed(action_down) {
-		g.player.dy = 4
+		g.player.dy = player_velocity
 	} else {
 		g.player.dy = 0
 	}
 	is_walking := g.player.dx != 0 || g.player.dy != 0
+
+	g.player.NormalizeVelocity()
 
 	g.player.x += g.player.dx
 	g.player.y += g.player.dy
